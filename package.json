@@ -1,0 +1,24 @@
+{
+  "name": "skelemation",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "budo src/index.ts:bundle.js --live -- -p tsify",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@cycle/dom": "^16.0.0",
+    "@cycle/run": "^3.0.0",
+    "@cycle/time": "^0.7.3",
+    "xstream": "^10.3.0"
+  },
+  "devDependencies": {
+    "budo": "^9.4.7",
+    "tsify": "^3.0.1",
+    "typescript": "^2.2.1"
+  }
+}
