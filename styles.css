@@ -1,0 +1,16 @@
+html, body {
+  margin: 0;
+  padding: 0;
+
+  height: 100%;
+}
+
+
+svg {
+  border: 1px solid saddlebrown;
+  height: 600px;
+}
+
+.skelemation {
+  display: flex;
+}
