@@ -1,13 +1,137 @@
-import {makeDOMDriver, div, h, pre, DOMSource, VNode} from '@cycle/dom';
+import {makeDOMDriver, div, h, pre, button, DOMSource, VNode} from '@cycle/dom';
 import {run} from '@cycle/run';
-import xs, {Stream} from 'xstream';
-import {add, subtract, Vector} from './vector';
 import {timeDriver} from '@cycle/time';
 import {TimeSource} from '@cycle/time/dist/time-source';
+import isolate from '@cycle/isolate';
+import xs, {Stream} from 'xstream';
+
+import {add, subtract, Vector} from './vector';
 
 const drivers = {
   DOM: makeDOMDriver('.app'),
   Time: timeDriver
+}
+
+const skellington : Bone = {
+  "id": 0,
+  "vector": {
+    "x": 0,
+    "y": 0
+  },
+  "children": [
+    {
+      "vector": {
+        "x": 12.800000190734863,
+        "y": 36.79999923706055
+      },
+      "id": 1,
+      "children": [
+        {
+          "vector": {
+            "x": 0.8000001907348633,
+            "y": 35.20000076293945
+          },
+          "id": 2,
+          "children": [
+            {
+              "vector": {
+                "x": 15.19999885559082,
+                "y": 5.599998474121094
+              },
+              "id": 3,
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "vector": {
+        "x": -7.199999809265137,
+        "y": 33.599998474121094
+      },
+      "id": 4,
+      "children": [
+        {
+          "vector": {
+            "x": -0.8000001907348633,
+            "y": 34.400001525878906
+          },
+          "id": 5,
+          "children": [
+            {
+              "vector": {
+                "x": 11.200000047683716,
+                "y": 5.599998474121094
+              },
+              "id": 6,
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "vector": {
+        "x": -0.800000011920929,
+        "y": -36
+      },
+      "id": 7,
+      "children": [
+        {
+          "vector": {
+            "x": -0.800000011920929,
+            "y": -31.199996948242188
+          },
+          "id": 8,
+          "children": [
+            {
+              "vector": {
+                "x": 19.99999964237213,
+                "y": 25.599998474121094
+              },
+              "id": 9,
+              "children": [
+                {
+                  "vector": {
+                    "x": 0.8000011444091797,
+                    "y": 38.39999842643738
+                  },
+                  "id": 10,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "vector": {
+                "x": -16.00000035762787,
+                "y": 23.999996185302734
+              },
+              "id": 11,
+              "children": [
+                {
+                  "vector": {
+                    "x": 0,
+                    "y": 39.20000076293945
+                  },
+                  "id": 12,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "vector": {
+                "x": 0,
+                "y": -24
+              },
+              "id": 13,
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
 }
 
 type Sources = {
@@ -29,7 +153,7 @@ type State = {
   mousePosition: Vector
 }
 
-type Reducer = (state: State) => State;
+type Reducer<T> = (state: T) => T;
 type Address = number[];
 
 type Bone = {
@@ -113,7 +237,7 @@ function view (state: State) {
         ...extras
       ]),
 
-      pre(JSON.stringify(state, null, 2)),
+      pre(JSON.stringify(state.rootBone, null, 2)),
     ])
   )
 }
@@ -153,7 +277,7 @@ function addBone (bone: Bone, address: Address, newBone: {vector: Vector}): Bone
   return bone;
 }
 
-function startAddingBoneReducer (event: MouseEvent): Reducer {
+function startAddingBoneReducer (event: MouseEvent): Reducer<State> {
   return function (state: State): State {
     const address = (event.currentTarget as Element).getAttribute('boneAddress');
 
@@ -198,7 +322,7 @@ function findBone (bone: Bone, address: Address): Bone {
   }, fauxRootBone);
 }
 
-function finishAddingBoneReducer (event: MouseEvent): Reducer {
+function finishAddingBoneReducer (event: MouseEvent): Reducer<State> {
   return function (state: State): State {
     if (state.mode !== 'addingBone') {
       return state;
@@ -218,7 +342,7 @@ function finishAddingBoneReducer (event: MouseEvent): Reducer {
   }
 }
 
-function applyReducer (state: State, reducer: Reducer): State {
+function applyReducer<T> (state: T, reducer: Reducer<T>): T {
   return reducer(state);
 }
 
@@ -246,7 +370,7 @@ function positionInSvg (svg: any) {
   }
 }
 
-function updateMousePosition (mousePosition: Vector): Reducer {
+function updateMousePosition (mousePosition: Vector): Reducer<State> {
   return function (state: State): State {
     state.mousePosition = mousePosition;
 
@@ -254,13 +378,13 @@ function updateMousePosition (mousePosition: Vector): Reducer {
   }
 }
 
-function main (sources: Sources): Sinks {
+function SkeletonCreator (sources: Sources): Sinks {
   const initialState: State = {
     mode: 'idle',
     addingBoneAddress: null,
     mousePosition: {x: 0, y: 0},
 
-    rootBone: {id: idMaker(), vector: {x: 0, y: 0}, children: []}
+    rootBone: skellington
   }
 
   const mousePosition$ = sources.DOM
@@ -302,6 +426,65 @@ function main (sources: Sources): Sinks {
 
   return {
     DOM: state$.map(view)
+  }
+}
+
+function SkeletonAnimator (sources: Sources): Sinks {
+  return {
+    DOM: xs.of(div('animator ahoy!'))
+  }
+}
+
+type MainState = {
+  mode: 'creating' | 'animating'
+}
+
+function main (sources: Sources): Sinks {
+  const skeletonCreator = isolate(SkeletonCreator)(sources);
+  const skeletonAnimator = isolate(SkeletonAnimator)(sources);
+
+  const initialState : MainState = {
+    mode: 'creating'
+  }
+
+  const switchToCreating$ = sources.DOM
+    .select('.creating')
+    .events('click')
+    .mapTo((state: MainState): MainState => ({...state, mode: 'creating'}));
+
+  const switchToAnimating$ = sources.DOM
+    .select('.animating')
+    .events('click')
+    .mapTo((state: MainState): MainState => ({...state, mode: 'animating'}));
+
+  const reducer$ = xs.merge(
+    switchToCreating$,
+    switchToAnimating$
+  );
+
+  const state$ = reducer$.fold(applyReducer, initialState);
+
+  const routes = {
+    creating: skeletonCreator,
+    animating: skeletonAnimator
+  }
+
+  const activeComponentDOM$ = state$
+    .map((state: MainState) => routes[state.mode].DOM)
+    .flatten();
+
+  function view (vtree: VNode): VNode {
+    return (
+      div('.app-container', [
+        button('.creating', 'Create Skeleton'),
+        button('.animating', 'Animate Skeleton'),
+        vtree
+      ])
+    )
+  }
+
+  return {
+    DOM: activeComponentDOM$.map(view)
   }
 }
 
