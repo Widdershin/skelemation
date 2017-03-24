@@ -1,4 +1,4 @@
-import {makeDOMDriver, div, h, pre, button, DOMSource, VNode} from '@cycle/dom';
+import {makeDOMDriver, div, h, pre, button, DOMSource, VNode, input} from '@cycle/dom';
 import {run} from '@cycle/run';
 import {timeDriver} from '@cycle/time';
 import {TimeSource} from '@cycle/time/dist/time-source';
@@ -11,6 +11,8 @@ const drivers = {
   DOM: makeDOMDriver('.app'),
   Time: timeDriver
 }
+
+const TAU = Math.PI * 2;
 
 const skellington : Bone = {
   "id": 0,
@@ -162,9 +164,6 @@ type Bone = {
   children: Bone[];
 }
 
-type BoneId = number | ':root';
-
-
 function renderBone (bone: Bone, parentPosition: Vector, address: Address): VNode {
   const position = add(parentPosition, bone.vector);
 
@@ -231,8 +230,8 @@ function view (state: State) {
 
   return (
     div('.skelemation', [
-      h('svg', {attrs: {viewBox}}, [
-        ...flatten(renderedBonesTree),
+      h('svg', {attrs: {viewBox, height: 600}}, [
+        ...renderedBonesTree,
 
         ...extras
       ]),
@@ -429,9 +428,124 @@ function SkeletonCreator (sources: Sources): Sinks {
   }
 }
 
+type AnimatorState = {
+  skeleton: Bone,
+  waveProgress: number,
+  waveLength: number,
+  waveFormula: string
+}
+
+function renderWavePath (state: AnimatorState, width: number, pixels: number): VNode {
+  const yAtPoint = (x: number) => {
+    const code = `
+      var x = ${x};
+
+      ${state.waveFormula};
+    `;
+
+    return eval(code);
+  };
+
+  const points = new Array(pixels).fill(0).map((_, index) => {
+    const x = index / pixels * width;
+
+    return `L ${x} ${yAtPoint(x)}`;
+  });
+
+  return (
+    h('path', {
+      attrs: {
+        d: `M 0 0 ` + points.join(' '),
+        stroke: 'skyblue',
+        fill: 'none',
+        'stroke-width': 0.03
+      }
+    })
+  )
+}
+
 function SkeletonAnimator (sources: Sources): Sinks {
+  const initialState = {
+    skeleton: skellington,
+    waveProgress: 0,
+    waveLength: 1000,
+    waveFormula: 'Math.sin(x)'
+  };
+
+  const update$ = sources.Time
+    .animationFrames()
+    .map(frame => frame.delta)
+    .map((delta: number): Reducer<AnimatorState> => (state) => ({...state, waveProgress: state.waveProgress + delta}))
+
+  const changeWaveform$ = sources.DOM
+    .select('.wave-formula')
+    .events('change')
+    .map(ev => (ev.target as HTMLInputElement).value)
+    .map((formula: string): Reducer<AnimatorState> => (state) => ({...state, waveFormula: formula}));
+
+  const reducer$ = xs.merge(
+    update$,
+    changeWaveform$
+  );
+
+  const state$ = reducer$.fold(applyReducer, initialState);
+
+  function view (state: AnimatorState): VNode {
+    const viewBox = `-320 -240 640 480`;
+    const waveViewBox = `0 -0.5 ${TAU} 1`;
+
+    const renderedBonesTree = renderSkeleton(
+      state.skeleton,
+      {x: 0, y: 0},
+      []
+    );
+
+    const waveProgress = state.waveProgress / state.waveLength % 1;
+
+    return (
+      div('.animator', [
+        h('svg', {attrs: {viewBox, height: 600}}, [
+          ...renderedBonesTree
+        ]),
+
+        div('.waves', [
+          h('svg', {attrs: {viewBox: waveViewBox, width: 300, height: 200}}, [
+            h('line', {
+              attrs: {
+                x1: 0,
+                x2: TAU,
+                y1: 0,
+                y2: 0,
+                stroke: 'gray',
+                'stroke-width': 0.01
+              }
+            }),
+
+            renderWavePath(state, TAU, 300),
+
+            h('line', {
+              attrs: {
+                x1: TAU * waveProgress,
+                x2: TAU * waveProgress,
+                y1: -3,
+                y2: 3,
+                stroke: 'darkgrey',
+                'stroke-width': 0.02
+              }
+            })
+          ]),
+
+          div('.wave-control', [
+            `y = `,
+            input('.wave-formula', {attrs: {value: state.waveFormula}})
+          ])
+        ])
+      ])
+    )
+  }
+
   return {
-    DOM: xs.of(div('animator ahoy!'))
+    DOM: state$.map(view)
   }
 }
 
@@ -444,7 +558,7 @@ function main (sources: Sources): Sinks {
   const skeletonAnimator = isolate(SkeletonAnimator)(sources);
 
   const initialState : MainState = {
-    mode: 'creating'
+    mode: 'animating'
   }
 
   const switchToCreating$ = sources.DOM

@@ -7,10 +7,17 @@ html, body {
 
 
 svg {
-  border: 1px solid saddlebrown;
-  height: 600px;
+  border: 1px solid black;
 }
 
 .skelemation {
   display: flex;
+}
+
+.animator {
+  display: flex;
+}
+
+.waves {
+  margin-left: 1em;
 }
